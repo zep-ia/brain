@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zep-agent-brain"
+version = "0.1.0"
+description = "Reusable agent brain schemas and consolidation primitives"
+requires-python = ">=3.11"

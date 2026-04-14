@@ -1,0 +1,19 @@
+{
+  "name": "@zep/brain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable agent brain memory graph schema and factories",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

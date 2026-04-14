@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: zep-agent-brain
+Version: 0.1.0
+Summary: Reusable agent brain schemas and consolidation primitives
+Requires-Python: >=3.11
