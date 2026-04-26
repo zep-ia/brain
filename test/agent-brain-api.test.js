@@ -1,0 +1,214 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS,
+  buildAgentBrainMemoryGraph,
+  runAgentBrainExperiment,
+} from "../src/index.js";
+
+test("agent brain API ranks generic Hermes events without Zepia-specific inputs", () => {
+  const graph = buildAgentBrainMemoryGraph({
+    agentId: "hermes-agent",
+    events: [
+      {
+        id: "evt-1",
+        content: "User prefers project-aware Gmail labels.",
+        kind: "conversation",
+        signals: { userCorrection: 0.9, projectRelevance: 0.8 },
+        references: ["evt-2"],
+      },
+      {
+        id: "evt-2",
+        content: "Daily morning Google Workspace workflow should run around 9 AM.",
+        kind: "workflow",
+        signals: { projectRelevance: 0.9, recurrence: 0.9 },
+        references: ["evt-1"],
+      },
+      {
+        id: "evt-3",
+        content: "Temporary debug note with low value.",
+        kind: "observation",
+        signals: { projectRelevance: 0.1 },
+      },
+    ],
+    toolCalls: [
+      {
+        id: "tool-1",
+        sourceEventIds: ["evt-1"],
+        referencedEventIds: ["evt-2"],
+        toolName: "gmail.label.apply",
+        weight: 2,
+      },
+    ],
+  });
+
+  assert.equal(graph.apiKind, "agent_brain_api_graph");
+  assert.equal(graph.agentId, "hermes-agent");
+  assert.equal(graph.nodes.length, 3);
+  assert.ok(graph.edges.length >= 3);
+  assert.equal(graph.zepiaCoupling, "none");
+});
+
+test("agent brain experiment defaults to 90 PageRank iterations and returns top long-term candidates", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "caller" },
+    topK: 2,
+    events: [
+      {
+        id: "evt-1",
+        content: "Remember SNUTI context through calendar integration.",
+        kind: "semantic",
+        signals: { projectRelevance: 1, recurrence: 0.7 },
+        references: ["evt-2"],
+      },
+      {
+        id: "evt-2",
+        content: "Gmail automation should infer project context from ongoing conversations.",
+        kind: "procedural",
+        signals: { projectRelevance: 1, userCorrection: 0.8 },
+        references: ["evt-1"],
+      },
+      {
+        id: "evt-3",
+        content: "One-off scratch note.",
+        kind: "observation",
+        signals: { projectRelevance: 0.05 },
+      },
+    ],
+  });
+
+  assert.equal(AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS, 90);
+  assert.equal(result.iterationsRequested, 90);
+  assert.equal(result.pageRank.iterationsCompleted <= 90, true);
+  assert.equal(result.runtimeAuthorization.authorized, true);
+  assert.equal(result.longTermCandidates.length, 2);
+  assert.deepEqual(
+    result.longTermCandidates.map((candidate) => candidate.memoryId),
+    ["evt-2", "evt-1"],
+  );
+});
+
+test("agent brain experiment honors custom iteration budgets in promotion metadata", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    iterations: 7,
+    runtime: { phase: "idle", authority: "caller" },
+    events: [
+      {
+        id: "evt-custom",
+        content: "Custom iteration budget should be observable by callers.",
+        signals: { projectRelevance: 1 },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.iterationsRequested, 7);
+  assert.equal(result.pageRank.maxIterations, 7);
+  assert.equal(result.pageRank.iterationsCompleted <= 7, true);
+  assert.equal(
+    result.longTermCandidates[0].promotionReason,
+    "top-k-page-rank-after-7-iteration-agent-experiment",
+  );
+});
+
+test("agent brain graph rejects malformed collection inputs and duplicate memory ids", () => {
+  assert.throws(
+    () => buildAgentBrainMemoryGraph({ agentId: "hermes-agent", events: {} }),
+    /events must be an array/,
+  );
+  assert.throws(
+    () => buildAgentBrainMemoryGraph({ agentId: "hermes-agent", toolCalls: {} }),
+    /toolCalls must be an array/,
+  );
+  assert.throws(
+    () =>
+      buildAgentBrainMemoryGraph({
+        agentId: "hermes-agent",
+        events: [
+          { id: "evt-1", content: "First copy." },
+          { id: "evt-1", content: "Duplicate copy." },
+        ],
+      }),
+    /duplicate memory id: evt-1/,
+  );
+});
+
+test("agent brain experiment fail-closes when graph identity fields contain unredactable secrets", () => {
+  const secretId = ["sk", "proj", "1234567890abcdefghijklmnopqrstuv"].join("-");
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "caller" },
+    events: [
+      {
+        id: secretId,
+        content: "Deploy token must not become a memory identifier.",
+        kind: "semantic",
+        signals: { projectRelevance: 1, recurrence: 1 },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.graphSecretBoundary.hasUnredactableSecrets, true);
+  assert.equal(result.graph, null);
+  assert.equal(result.longTermCandidates.length, 0);
+});
+
+test("agent brain experiment blocks non-caller runtime authorities", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "scheduler" },
+    events: [
+      {
+        id: "evt-1",
+        content: "Should not consolidate from scheduler-only authority.",
+        signals: { projectRelevance: 1 },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.runtimeAuthorization.authorized, false);
+  assert.equal(result.longTermCandidates.length, 0);
+});
+
+test("agent brain experiment blocks default active runtime consolidation", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    events: [
+      {
+        id: "evt-active",
+        content: "Active runtime should capture only, not consolidate.",
+        signals: { projectRelevance: 1 },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.runtimeAuthorization.phase, "active");
+  assert.equal(result.runtimeAuthorization.authorized, false);
+  assert.equal(result.longTermCandidates.length, 0);
+});
+
+test("agent brain experiment redacts secrets from every returned event-derived payload", () => {
+  const secret = ["sk", "proj", "1234567890abcdefghijklmnopqrstuv"].join("-");
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "caller" },
+    events: [
+      {
+        id: "evt-redactable",
+        content: `A redactable key ${secret} appeared in conversation text.`,
+        signals: { projectRelevance: 1 },
+      },
+    ],
+  });
+
+  const serialized = JSON.stringify(result);
+  assert.equal(result.status, "completed");
+  assert.equal(serialized.includes(secret), false);
+  assert.equal(result.graphSecretBoundary.detected, true);
+});
