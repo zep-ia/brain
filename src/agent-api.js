@@ -381,6 +381,44 @@ const createPersonalizationVector = (nodes) =>
     Object.fromEntries(nodes.map((node) => [node.memoryId, node.signalScore])),
   );
 
+const candidateTokenSet = (candidate) =>
+  extractConceptTokens({
+    kind: "",
+    summary: candidate.summary,
+    content: candidate.content,
+  });
+
+const calculateOverlapCoefficient = (leftTokens, rightTokens) => {
+  const smallerSize = Math.min(leftTokens.size, rightTokens.size);
+  if (smallerSize === 0) {
+    return 0;
+  }
+
+  return countSharedConceptTokens(leftTokens, rightTokens) / smallerSize;
+};
+
+const isNearDuplicateCandidate = (candidate, selectedCandidates) => {
+  const candidateTokens = candidateTokenSet(candidate);
+  return selectedCandidates.some((selectedCandidate) => {
+    const selectedTokens = candidateTokenSet(selectedCandidate);
+    return calculateOverlapCoefficient(candidateTokens, selectedTokens) >= 0.75;
+  });
+};
+
+const selectDiverseRankedMemories = (rankedMemories, topK) => {
+  const selectedCandidates = [];
+  for (const rankedMemory of rankedMemories) {
+    if (selectedCandidates.length >= topK) {
+      break;
+    }
+    if (isNearDuplicateCandidate(rankedMemory, selectedCandidates)) {
+      continue;
+    }
+    selectedCandidates.push(rankedMemory);
+  }
+  return selectedCandidates;
+};
+
 export const AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS = 90;
 export const AGENT_BRAIN_API_DEFAULT_TOP_K = 5;
 
@@ -552,7 +590,7 @@ export const runAgentBrainExperiment = (input = {}) => {
         left.memoryId.localeCompare(right.memoryId),
     );
 
-  const selectedCandidates = rankedMemories.slice(0, topK);
+  const selectedCandidates = selectDiverseRankedMemories(rankedMemories, topK);
   const secretBoundary = sanitizeHippocampusBoundaryPayload(selectedCandidates, {
     direction: "output",
     policy: {

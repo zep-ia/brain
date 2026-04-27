@@ -141,6 +141,11 @@ const createDroppedEvent = (event, reason) => ({
   reason,
 });
 
+const shouldPromoteEvent = (event) =>
+  hasDurableSignal(event.signals) ||
+  looksLikeDurableFact(event.content) ||
+  event.signals.hippocampalImportance >= 0.75;
+
 export const DEFAULT_HIPPOCAMPUS_CONSOLIDATION_OPTIONS = freezeDeep({
   dropAssistantEchoesWithoutDurableSignal: true,
   stripRecalledMemoryContext: true,
@@ -213,7 +218,7 @@ export const consolidateHippocampalEpisode = (input = {}) => {
   });
 
   const promotedEvents = filteredEvents
-    .filter((event) => event.role === "user" || hasDurableSignal(event.signals) || looksLikeDurableFact(event.content))
+    .filter(shouldPromoteEvent)
     .map((event) => freezeDeep({
       id: event.id,
       kind: event.kind === "conversation" ? "episodic_fact" : event.kind,
