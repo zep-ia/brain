@@ -159,9 +159,80 @@ const createReferenceEdge = ({ from, to, weight, relation, evidenceId }) =>
     evidenceId,
   });
 
+const getNodeSessionId = (node) => {
+  const sessionId = node.metadata?.sessionId ?? node.metadata?.session_id;
+  return typeof sessionId === "string" && sessionId.trim() ? sessionId.trim() : null;
+};
+
+const CONCEPT_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "because",
+  "been",
+  "being",
+  "could",
+  "from",
+  "have",
+  "help",
+  "into",
+  "needs",
+  "note",
+  "only",
+  "provider",
+  "remember",
+  "should",
+  "that",
+  "their",
+  "there",
+  "this",
+  "turn",
+  "user",
+  "using",
+  "wants",
+  "were",
+  "when",
+  "with",
+  "work",
+]);
+
+const extractConceptTokens = (node) => {
+  const tokens = new Set();
+  const combinedText = `${node.kind} ${node.summary} ${node.content}`.toLowerCase();
+  for (const token of combinedText.match(/[a-z][a-z0-9_-]{3,}/g) ?? []) {
+    if (!CONCEPT_STOP_WORDS.has(token)) {
+      tokens.add(token);
+    }
+  }
+  return tokens;
+};
+
+const countSharedConceptTokens = (leftTokens, rightTokens) => {
+  let count = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 const buildAgentBrainEdges = (nodes, toolCalls) => {
   const nodeIdSet = new Set(nodes.map((node) => node.memoryId));
   const edges = [];
+  const edgeKeys = new Set();
+  const addEdge = (edge) => {
+    if (edge.from === edge.to) {
+      return;
+    }
+    const edgeKey = `${edge.from}\u0000${edge.to}\u0000${edge.relation}\u0000${edge.evidenceId}`;
+    if (edgeKeys.has(edgeKey)) {
+      return;
+    }
+    edgeKeys.add(edgeKey);
+    edges.push(createReferenceEdge(edge));
+  };
 
   nodes.forEach((node) => {
     node.references.forEach((referenceId) => {
@@ -169,17 +240,79 @@ const buildAgentBrainEdges = (nodes, toolCalls) => {
         return;
       }
 
-      edges.push(
-        createReferenceEdge({
-          from: node.memoryId,
-          to: referenceId,
-          weight: 1,
-          relation: "event-reference",
-          evidenceId: `${node.memoryId}->${referenceId}`,
-        }),
-      );
+      addEdge({
+        from: node.memoryId,
+        to: referenceId,
+        weight: 1,
+        relation: "event-reference",
+        evidenceId: `${node.memoryId}->${referenceId}`,
+      });
     });
   });
+
+  const nodesBySessionId = new Map();
+  nodes.forEach((node) => {
+    const sessionId = getNodeSessionId(node);
+    if (!sessionId) {
+      return;
+    }
+    const sessionNodes = nodesBySessionId.get(sessionId) ?? [];
+    sessionNodes.push(node);
+    nodesBySessionId.set(sessionId, sessionNodes);
+  });
+
+  nodesBySessionId.forEach((sessionNodes, sessionId) => {
+    for (let index = 1; index < sessionNodes.length; index += 1) {
+      const previousNode = sessionNodes[index - 1];
+      const node = sessionNodes[index];
+      addEdge({
+        from: previousNode.memoryId,
+        to: node.memoryId,
+        weight: 0.7,
+        relation: "session-continuity",
+        evidenceId: `${sessionId}:${previousNode.memoryId}->${node.memoryId}`,
+      });
+      addEdge({
+        from: node.memoryId,
+        to: previousNode.memoryId,
+        weight: 0.35,
+        relation: "session-continuity:reverse",
+        evidenceId: `${sessionId}:${node.memoryId}->${previousNode.memoryId}`,
+      });
+    }
+  });
+
+  const conceptTokensByMemoryId = new Map(
+    nodes.map((node) => [node.memoryId, extractConceptTokens(node)]),
+  );
+  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+      const left = nodes[leftIndex];
+      const right = nodes[rightIndex];
+      const sharedConceptCount = countSharedConceptTokens(
+        conceptTokensByMemoryId.get(left.memoryId),
+        conceptTokensByMemoryId.get(right.memoryId),
+      );
+      if (sharedConceptCount < 2) {
+        continue;
+      }
+      const weight = Math.min(1, 0.25 + sharedConceptCount * 0.1);
+      addEdge({
+        from: left.memoryId,
+        to: right.memoryId,
+        weight,
+        relation: "shared-concept",
+        evidenceId: `${left.memoryId}<->${right.memoryId}:shared-${sharedConceptCount}`,
+      });
+      addEdge({
+        from: right.memoryId,
+        to: left.memoryId,
+        weight,
+        relation: "shared-concept",
+        evidenceId: `${right.memoryId}<->${left.memoryId}:shared-${sharedConceptCount}`,
+      });
+    }
+  }
 
   toolCalls.forEach((toolCall) => {
     toolCall.sourceEventIds.forEach((sourceEventId) => {
@@ -192,24 +325,20 @@ const buildAgentBrainEdges = (nodes, toolCalls) => {
           return;
         }
 
-        edges.push(
-          createReferenceEdge({
-            from: sourceEventId,
-            to: referencedEventId,
-            weight: toolCall.weight,
-            relation: `tool-call:${toolCall.toolName}`,
-            evidenceId: toolCall.id,
-          }),
-        );
-        edges.push(
-          createReferenceEdge({
-            from: referencedEventId,
-            to: sourceEventId,
-            weight: toolCall.weight,
-            relation: `tool-call:${toolCall.toolName}:reverse`,
-            evidenceId: toolCall.id,
-          }),
-        );
+        addEdge({
+          from: sourceEventId,
+          to: referencedEventId,
+          weight: toolCall.weight,
+          relation: `tool-call:${toolCall.toolName}`,
+          evidenceId: toolCall.id,
+        });
+        addEdge({
+          from: referencedEventId,
+          to: sourceEventId,
+          weight: toolCall.weight,
+          relation: `tool-call:${toolCall.toolName}:reverse`,
+          evidenceId: toolCall.id,
+        });
       });
     });
   });
