@@ -3834,3 +3834,81 @@ export function archiveStaleMemories(
   graph: AgentBrainMemoryGraph,
   options: ArchivalTransitionOptions,
 ): Promise<Readonly<ArchivalTransitionResult>>;
+
+
+export interface AgentBrainApiEventInput {
+  id?: string;
+  memoryId?: string;
+  kind?: string;
+  content: string;
+  summary?: string | null;
+  references?: string[];
+  referenceIds?: string[];
+  signals?: Record<string, number>;
+  identity?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AgentBrainApiToolCallInput {
+  id?: string;
+  toolName?: string;
+  name?: string;
+  sourceEventIds?: string[];
+  sourceMemoryIds?: string[];
+  referencedEventIds?: string[];
+  referencedMemoryIds?: string[];
+  targetEventIds?: string[];
+  weight?: number;
+}
+
+export interface AgentBrainApiRuntimeInput {
+  phase?: string;
+  authority?: string;
+}
+
+export interface AgentBrainApiInput {
+  agentId: string;
+  events?: AgentBrainApiEventInput[];
+  toolCalls?: AgentBrainApiToolCallInput[];
+}
+
+export interface AgentBrainExperimentInput extends AgentBrainApiInput {
+  runtime?: AgentBrainApiRuntimeInput;
+  iterations?: number;
+  topK?: number;
+}
+
+export interface AgentBrainApiMemoryGraph {
+  apiKind: "agent_brain_api_graph";
+  schemaVersion: "1.0.0";
+  agentId: string;
+  zepiaCoupling: "none";
+  nodes: ReadonlyArray<Record<string, unknown>>;
+  toolCalls: ReadonlyArray<Record<string, unknown>>;
+  edges: ReadonlyArray<Record<string, unknown>>;
+}
+
+export interface AgentBrainExperimentResult {
+  apiKind: "agent_brain_experiment_result";
+  status: "completed" | "blocked";
+  agentId: string;
+  iterationsRequested: number;
+  runtimeAuthorization: Readonly<Record<string, unknown>>;
+  graph: Readonly<AgentBrainApiMemoryGraph> | null;
+  pageRank: Readonly<Record<string, unknown>> | null;
+  rankedMemories: ReadonlyArray<Record<string, unknown>>;
+  longTermCandidates: ReadonlyArray<Record<string, unknown>>;
+  graphSecretBoundary: Readonly<HippocampusBoundarySanitizationResult> | null;
+  secretBoundary: Readonly<HippocampusBoundarySanitizationResult> | null;
+}
+
+export const AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS: 90;
+export const AGENT_BRAIN_API_DEFAULT_TOP_K: 5;
+
+export function buildAgentBrainMemoryGraph(
+  input: AgentBrainApiInput,
+): Readonly<AgentBrainApiMemoryGraph>;
+
+export function runAgentBrainExperiment(
+  input: AgentBrainExperimentInput,
+): Readonly<AgentBrainExperimentResult>;

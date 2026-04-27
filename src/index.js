@@ -16050,6 +16050,13 @@ export {
 } from "./pagerank.js";
 
 export {
+  AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS,
+  AGENT_BRAIN_API_DEFAULT_TOP_K,
+  buildAgentBrainMemoryGraph,
+  runAgentBrainExperiment,
+} from "./agent-api.js";
+
+export {
   resolveZepiaConsolidationTopK,
 } from "./zepia-consolidation-config.js";
 
