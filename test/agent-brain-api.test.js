@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS,
   buildAgentBrainMemoryGraph,
+  consolidateHippocampalEpisode,
   runAgentBrainExperiment,
 } from "../src/index.js";
 
@@ -48,6 +49,156 @@ test("agent brain API ranks generic Hermes events without Zepia-specific inputs"
   assert.equal(graph.nodes.length, 3);
   assert.ok(graph.edges.length >= 3);
   assert.equal(graph.zepiaCoupling, "none");
+});
+
+test("agent brain hippocampus demotes low-value user prompts from long-term promotion", () => {
+  const hippocampus = consolidateHippocampalEpisode({
+    agentId: "hermes-agent",
+    sessionId: "session-quality",
+    events: [
+      {
+        id: "durable-config",
+        content:
+          "Hermes local config is set to memory.provider=brain and PR #16224 includes brain_status graph metrics.",
+        kind: "memory_write",
+        role: "memory",
+        signals: { durable: 1 },
+      },
+      {
+        id: "low-value-writing-prompt",
+        content: "[JQ] 책을 쓰면 좋은점에 대해 설명해봐\n\n그리고 draft좀 작성해줘",
+        kind: "message",
+        role: "user",
+      },
+      {
+        id: "low-value-status-check",
+        content: "[JQ] 오케이 자신있어?",
+        kind: "message",
+        role: "user",
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    hippocampus.promotedEvents.map((event) => event.id),
+    ["durable-config"],
+  );
+  assert.ok(hippocampus.filteredEvents.some((event) => event.id === "low-value-writing-prompt"));
+});
+
+test("agent brain API derives graph edges from session continuity and shared concepts", () => {
+  const graph = buildAgentBrainMemoryGraph({
+    agentId: "hermes-agent",
+    events: [
+      {
+        id: "turn-1-user",
+        content: "User wants the Brain memory provider to remember hippocampus consolidation work.",
+        kind: "message",
+        metadata: { role: "user", sessionId: "session-a" },
+      },
+      {
+        id: "turn-1-assistant",
+        content: "Implemented hippocampus consolidation for the Brain memory provider.",
+        kind: "message",
+        metadata: { role: "assistant", sessionId: "session-a" },
+      },
+      {
+        id: "turn-2-user",
+        content: "Improve the Brain memory graph so PageRank has useful edges.",
+        kind: "message",
+        metadata: { role: "user", sessionId: "session-a" },
+      },
+      {
+        id: "other-session",
+        content: "Unrelated lunch note.",
+        kind: "observation",
+        metadata: { role: "user", sessionId: "session-b" },
+      },
+    ],
+  });
+
+  const relations = new Set(graph.edges.map((edge) => edge.relation));
+  assert.ok(relations.has("session-continuity"));
+  assert.ok(relations.has("shared-concept"));
+  assert.ok(graph.edges.every((edge) => edge.from !== edge.to));
+  assert.ok(graph.edges.some((edge) => edge.from === "turn-1-user" && edge.to === "turn-1-assistant"));
+  assert.equal(graph.edges.some((edge) => edge.from === "other-session" || edge.to === "other-session"), false);
+});
+
+test("agent brain hippocampus experiment produces connected graph without explicit references", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "caller" },
+    hippocampus: { enabled: true },
+    topK: 2,
+    events: [
+      {
+        id: "evt-user-1",
+        content: "Remember that Hermes Brain needs hippocampus consolidation for durable memory.",
+        kind: "message",
+        metadata: { role: "user", sessionId: "session-a" },
+      },
+      {
+        id: "evt-user-2",
+        content: "Improve Hermes Brain graph edges so PageRank can link related memory events.",
+        kind: "message",
+        metadata: { role: "user", sessionId: "session-a" },
+      },
+      {
+        id: "evt-assistant-noise",
+        content: "I can help with that.",
+        kind: "message",
+        metadata: { role: "assistant", sessionId: "session-a" },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.hippocampus.enabled, true);
+  assert.ok(result.graph.edges.length > 0);
+  assert.ok(result.graph.edges.some((edge) => edge.relation === "session-continuity"));
+  assert.equal(result.graph.nodes.some((node) => node.memoryId === "evt-assistant-noise"), false);
+});
+
+test("agent brain experiment diversifies long-term candidates by suppressing near-duplicate durable summaries", () => {
+  const result = runAgentBrainExperiment({
+    agentId: "hermes-agent",
+    runtime: { phase: "idle", authority: "caller" },
+    topK: 2,
+    hippocampus: { enabled: true },
+    events: [
+      {
+        id: "newer-hermes-summary",
+        role: "memory",
+        kind: "memory_write",
+        content:
+          "Hermes local config is set to memory.provider=brain with brain repo path and PR #16224 includes hippocampus payload enablement, local noise filtering, and brain_status graph metrics.",
+        signals: { durable: 1, projectRelevance: 1 },
+      },
+      {
+        id: "older-hermes-summary",
+        role: "memory",
+        kind: "memory_write",
+        content:
+          "Hermes local config is set to memory.provider=brain with brain repo path and PR #16224 includes hippocampus payload enablement and local noise filtering.",
+        signals: { durable: 0.9, projectRelevance: 0.9 },
+      },
+      {
+        id: "zep-brain-summary",
+        role: "memory",
+        kind: "memory_write",
+        content:
+          "zep-ia/brain PR #3 adds session-continuity graph edges and shared-concept linking for PageRank recall quality.",
+        signals: { durable: 0.8, projectRelevance: 0.8 },
+      },
+    ],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.deepEqual(
+    result.longTermCandidates.map((candidate) => candidate.memoryId),
+    ["newer-hermes-summary", "zep-brain-summary"],
+  );
 });
 
 test("agent brain experiment defaults to 90 PageRank iterations and returns top long-term candidates", () => {

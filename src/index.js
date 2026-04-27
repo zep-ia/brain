@@ -16050,6 +16050,11 @@ export {
 } from "./pagerank.js";
 
 export {
+  DEFAULT_HIPPOCAMPUS_CONSOLIDATION_OPTIONS,
+  consolidateHippocampalEpisode,
+} from "./hippocampus-consolidation.js";
+
+export {
   AGENT_BRAIN_API_DEFAULT_EXPERIMENT_ITERATIONS,
   AGENT_BRAIN_API_DEFAULT_TOP_K,
   buildAgentBrainMemoryGraph,
