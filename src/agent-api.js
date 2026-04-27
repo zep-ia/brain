@@ -1,3 +1,4 @@
+import { consolidateHippocampalEpisode } from "./hippocampus-consolidation.js";
 import { evaluateWeightedPageRank } from "./pagerank.js";
 import { sanitizeHippocampusBoundaryPayload } from "./hippocampus-secret-policy.js";
 import { evaluateIdleWindowAuthorization } from "./runtime-phase.js";
@@ -309,7 +310,21 @@ export const runAgentBrainExperiment = (input = {}) => {
     "topK",
   );
   const runtime = normalizeRuntime(normalizedInput.runtime);
-  const rawGraph = buildAgentBrainMemoryGraph(normalizedInput);
+  const hippocampusEnabled = Boolean(normalizedInput.hippocampus?.enabled);
+  const hippocampus = hippocampusEnabled
+    ? consolidateHippocampalEpisode({
+        agentId: normalizedInput.agentId,
+        sessionId: normalizedInput.sessionId,
+        events: normalizedInput.events,
+      })
+    : null;
+  const graphInput = hippocampusEnabled
+    ? {
+        ...normalizedInput,
+        events: hippocampus.promotedEvents,
+      }
+    : normalizedInput;
+  const rawGraph = buildAgentBrainMemoryGraph(graphInput);
   const graphBoundary = sanitizeHippocampusBoundaryPayload(rawGraph, {
     direction: "input",
     policy: {
@@ -326,6 +341,7 @@ export const runAgentBrainExperiment = (input = {}) => {
       agentId: rawGraph.agentId,
       iterationsRequested,
       runtimeAuthorization,
+      hippocampus: hippocampusEnabled ? { enabled: true, ...hippocampus } : { enabled: false },
       graph: null,
       pageRank: null,
       rankedMemories: [],
@@ -344,6 +360,7 @@ export const runAgentBrainExperiment = (input = {}) => {
       agentId: graph.agentId,
       iterationsRequested,
       runtimeAuthorization,
+      hippocampus: hippocampusEnabled ? { enabled: true, ...hippocampus } : { enabled: false },
       graph,
       pageRank: null,
       rankedMemories: [],
@@ -360,6 +377,7 @@ export const runAgentBrainExperiment = (input = {}) => {
       agentId: graph.agentId,
       iterationsRequested,
       runtimeAuthorization,
+      hippocampus: hippocampusEnabled ? { enabled: true, ...hippocampus } : { enabled: false },
       graph,
       pageRank: null,
       rankedMemories: [],
@@ -421,6 +439,7 @@ export const runAgentBrainExperiment = (input = {}) => {
       agentId: graph.agentId,
       iterationsRequested,
       runtimeAuthorization,
+      hippocampus: hippocampusEnabled ? { enabled: true, ...hippocampus } : { enabled: false },
       graph,
       pageRank: experimentPageRank,
       rankedMemories,
@@ -436,6 +455,7 @@ export const runAgentBrainExperiment = (input = {}) => {
     agentId: graph.agentId,
     iterationsRequested,
     runtimeAuthorization,
+    hippocampus: hippocampusEnabled ? { enabled: true, ...hippocampus } : { enabled: false },
     graph,
     pageRank: experimentPageRank,
     rankedMemories,
