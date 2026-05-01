@@ -1,5 +1,11 @@
 const isPlainObject = (value) =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  Boolean(value) &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+const isJsonPrimitive = (value) =>
+  value === null || ["string", "number", "boolean"].includes(typeof value);
 
 const freezeDeep = (value) => {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) {
@@ -67,26 +73,29 @@ const normalizeOptionalString = (value, label) => {
   return normalizeRequiredString(value, label);
 };
 
-const compareOffsets = (left, right) => {
-  if (typeof left === "number" && typeof right === "number") {
-    return left - right;
+const clonePayload = (value, label = "payload") => {
+  if (isJsonPrimitive(value)) {
+    if (typeof value === "number" && !Number.isFinite(value)) {
+      throw new TypeError(`${label} must be JSON-compatible`);
+    }
+
+    return value;
   }
 
-  return String(left).localeCompare(String(right), undefined, { numeric: true });
-};
-
-const clonePayload = (value) => {
   if (Array.isArray(value)) {
-    return value.map(clonePayload);
+    return value.map((entry, index) => clonePayload(entry, `${label}[${index}]`));
   }
 
   if (isPlainObject(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [key, clonePayload(nestedValue)]),
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        clonePayload(nestedValue, `${label}.${key}`),
+      ]),
     );
   }
 
-  return value;
+  throw new TypeError(`${label} must be JSON-compatible`);
 };
 
 const createCheckpointKey = ({ agentId, syncSource, streamId }) =>
@@ -147,7 +156,7 @@ export const ingestElectricEventBatch = (events, options = {}) => {
       streamId,
       offset,
       eventType,
-      payload: clonePayload(event.payload ?? {}),
+      payload: clonePayload(event.payload === undefined ? {} : event.payload),
       observedAt,
     };
     rows.push(row);
@@ -169,13 +178,7 @@ export const ingestElectricEventBatch = (events, options = {}) => {
       return;
     }
 
-    if (compareOffsets(offset, currentCheckpoint.fromOffset) < 0) {
-      currentCheckpoint.fromOffset = offset;
-    }
-
-    if (compareOffsets(offset, currentCheckpoint.toOffset) > 0) {
-      currentCheckpoint.toOffset = offset;
-    }
+    currentCheckpoint.toOffset = offset;
   });
 
   return freezeDeep({

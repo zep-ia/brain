@@ -61,8 +61,47 @@ const assertBooleanConstant = (value, expected, label) => {
   return expected;
 };
 
+const assertStringConstant = (value, expected, label) => {
+  const normalizedValue = normalizeOptionalString(value, expected, label);
+
+  if (normalizedValue !== expected) {
+    throw new TypeError(`${label} must remain ${expected}`);
+  }
+
+  return expected;
+};
+
+const normalizeAllowedString = (value, fallback, allowedValues, label, message) => {
+  const normalizedValue = normalizeOptionalString(value, fallback, label);
+
+  if (!allowedValues.includes(normalizedValue)) {
+    throw new TypeError(message ?? `${label} must be one of: ${allowedValues.join(", ")}`);
+  }
+
+  return normalizedValue;
+};
+
+const normalizeAllowedStringList = (value, fallback, allowedValues, label, message) => {
+  const normalizedValues = normalizeStringList(value, fallback, label);
+  const invalidValues = normalizedValues.filter((entry) => !allowedValues.includes(entry));
+
+  if (invalidValues.length > 0) {
+    throw new TypeError(message ?? `${label} contains unsupported values: ${invalidValues.join(", ")}`);
+  }
+
+  return normalizedValues;
+};
+
 export const GEMMA4_B200_ELECTRIC_PLAN_SCHEMA_ID =
   "gemma4_b200_electric_consolidation_plan";
+
+export const GEMMA4_B200_ELECTRIC_SAFE_RUNTIME_TRANSPORTS = freezeDeep([
+  "rpc",
+  "grpc",
+  "connect-rpc",
+  "http-rpc",
+  "unix-socket-rpc",
+]);
 
 export const GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS = freezeDeep([
   "embedding-generation",
@@ -102,10 +141,12 @@ export const createGemma4B200ElectricConsolidationPlan = (options = {}) => {
     purpose:
       "Use Electric as the durable stream/read-sync plane while Gemma 4 on B200 handles offline hippocampus-style memory consolidation work.",
     runtimeBoundary: {
-      transport: normalizeOptionalString(
+      transport: normalizeAllowedString(
         runtimeBoundary.transport,
         "rpc",
+        GEMMA4_B200_ELECTRIC_SAFE_RUNTIME_TRANSPORTS,
         "runtimeBoundary.transport",
+        "runtimeBoundary.transport must remain an RPC-safe transport",
       ),
       zepiaToBrainUsesRdma: assertBooleanConstant(
         runtimeBoundary.zepiaToBrainUsesRdma,
@@ -140,7 +181,7 @@ export const createGemma4B200ElectricConsolidationPlan = (options = {}) => {
       ),
     },
     model: {
-      modelFamily: normalizeOptionalString(
+      modelFamily: assertStringConstant(
         model.modelFamily,
         "gemma-4",
         "model.modelFamily",
@@ -155,7 +196,7 @@ export const createGemma4B200ElectricConsolidationPlan = (options = {}) => {
       ]),
     },
     accelerator: {
-      acceleratorClass: normalizeOptionalString(
+      acceleratorClass: assertStringConstant(
         accelerator.acceleratorClass,
         "b200",
         "accelerator.acceleratorClass",
@@ -172,10 +213,12 @@ export const createGemma4B200ElectricConsolidationPlan = (options = {}) => {
     workerPipeline: {
       executionMode: "offline-plan-only",
       liveWorkingLoopCoupling: "offline-decoupled",
-      operations: normalizeStringList(
+      operations: normalizeAllowedStringList(
         workerPipeline.operations,
         GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS,
+        GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS,
         "workerPipeline.operations",
+        "workerPipeline.operations must use supported offline operations",
       ),
     },
     checkpointPolicy: {

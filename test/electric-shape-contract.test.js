@@ -15,8 +15,11 @@ test("shape table list contains required Electric Postgres tables", () => {
     new Set([
       "agent_events",
       "memory_candidates",
+      "short_term_memory",
+      "tool_calls",
       "long_term_memory",
       "consolidation_jobs",
+      "consolidation_runs",
       "stream_checkpoints",
     ]),
   );
@@ -40,6 +43,17 @@ test("long-term memory shape is agent-scoped", () => {
   assert.equal(shape.accessScope, "agent");
   assert.equal(shape.whereTemplate, "agent_id = $agent_id");
   assert.deepEqual(shape.parameters, ["agentId"]);
+});
+
+test("service-wide shapes are explicitly backend-only", () => {
+  const contract = createElectricPostgresShapeContract();
+  const serviceShapes = contract.shapes.filter((shape) => shape.accessScope === "service");
+
+  assert.ok(serviceShapes.length > 0);
+  for (const shape of serviceShapes) {
+    assert.equal(shape.exposure, "backend-only");
+    assert.equal(shape.requiresServiceAuthorization, true);
+  }
 });
 
 test("shape contract is pure and deeply frozen", () => {

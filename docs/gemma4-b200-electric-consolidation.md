@@ -47,8 +47,11 @@ Hermes / Ouroboros / Zepia runtime
 
 - `agent_events where session_id = $session_id`
 - `memory_candidates where agent_id = $agent_id and status in ('pending', 'deferred')`
+- `short_term_memory where agent_id = $agent_id`
+- `tool_calls where agent_id = $agent_id`
 - `long_term_memory where agent_id = $agent_id`
-- `consolidation_jobs where status in ('queued', 'running', 'blocked')`
+- `consolidation_jobs where status in ('queued', 'running', 'blocked')` — backend/service-only; never expose directly to agent clients without service authorization.
+- `consolidation_runs where agent_id = $agent_id`
 - `stream_checkpoints where agent_id = $agent_id`
 
 ## Gemma 4 / B200 worker responsibilities
@@ -100,9 +103,10 @@ npm test -- test/gemma4-b200-electric-plan.test.js
 - Test: `test/electric-shape-contract.test.js`
 
 **Required tests:**
-- Shape table list contains `agent_events`, `memory_candidates`, `long_term_memory`, `consolidation_jobs`, and `stream_checkpoints`.
+- Shape table list contains `agent_events`, `memory_candidates`, `short_term_memory`, `tool_calls`, `long_term_memory`, `consolidation_jobs`, `consolidation_runs`, and `stream_checkpoints`.
 - Memory candidate shape is agent-scoped.
 - Long-term memory shape is agent-scoped.
+- Service-wide shapes are explicitly backend-only and require service authorization.
 
 ### Task 4: B200 worker capability profile
 

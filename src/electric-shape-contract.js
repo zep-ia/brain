@@ -28,6 +28,20 @@ const ELECTRIC_POSTGRES_SHAPES = freezeDeep([
     accessScope: "agent",
   },
   {
+    shapeName: "short_term_memory_by_agent",
+    table: "short_term_memory",
+    whereTemplate: "agent_id = $agent_id",
+    parameters: ["agentId"],
+    accessScope: "agent",
+  },
+  {
+    shapeName: "tool_calls_by_agent",
+    table: "tool_calls",
+    whereTemplate: "agent_id = $agent_id",
+    parameters: ["agentId"],
+    accessScope: "agent",
+  },
+  {
     shapeName: "long_term_memory_by_agent",
     table: "long_term_memory",
     whereTemplate: "agent_id = $agent_id",
@@ -40,6 +54,15 @@ const ELECTRIC_POSTGRES_SHAPES = freezeDeep([
     whereTemplate: "status in ('queued', 'running', 'blocked')",
     parameters: [],
     accessScope: "service",
+    exposure: "backend-only",
+    requiresServiceAuthorization: true,
+  },
+  {
+    shapeName: "consolidation_runs_by_agent",
+    table: "consolidation_runs",
+    whereTemplate: "agent_id = $agent_id",
+    parameters: ["agentId"],
+    accessScope: "agent",
   },
   {
     shapeName: "stream_checkpoints_by_agent",

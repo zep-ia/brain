@@ -3058,6 +3058,13 @@ export interface ArchivalTransitionResult {
   nextGraph: Readonly<AgentBrainMemoryGraph>;
 }
 
+export type Gemma4B200ElectricSafeRuntimeTransport =
+  | "rpc"
+  | "grpc"
+  | "connect-rpc"
+  | "http-rpc"
+  | "unix-socket-rpc";
+
 export type Gemma4B200ElectricWorkerOperation =
   | "embedding-generation"
   | "memory-candidate-reranking"
@@ -3071,7 +3078,7 @@ export interface Gemma4B200ElectricConsolidationPlanInput {
   streamIds?: ReadonlyArray<string> | null;
   postgresTables?: ReadonlyArray<string> | null;
   runtimeBoundary?: {
-    transport?: string | null;
+    transport?: Gemma4B200ElectricSafeRuntimeTransport | null;
     zepiaToBrainUsesRdma?: false | null;
   } | null;
   electric?: {
@@ -3079,13 +3086,13 @@ export interface Gemma4B200ElectricConsolidationPlanInput {
     postgresTables?: ReadonlyArray<string> | null;
   } | null;
   model?: {
-    modelFamily?: string | null;
+    modelFamily?: "gemma-4" | null;
   } | null;
   accelerator?: {
-    acceleratorClass?: string | null;
+    acceleratorClass?: "b200" | null;
   } | null;
   workerPipeline?: {
-    operations?: ReadonlyArray<string> | null;
+    operations?: ReadonlyArray<Gemma4B200ElectricWorkerOperation> | null;
   } | null;
   writePath?: {
     electricOwnsWrites?: false | null;
@@ -3099,7 +3106,7 @@ export interface Gemma4B200ElectricConsolidationPlan {
   planId: string;
   purpose: string;
   runtimeBoundary: Readonly<{
-    transport: string;
+    transport: Gemma4B200ElectricSafeRuntimeTransport;
     zepiaToBrainUsesRdma: false;
     authority: "caller-authorized-offline-window";
     authorizedRuntimePhases: ReadonlyArray<"idle" | "rest" | "break" | "sleep">;
@@ -3112,12 +3119,12 @@ export interface Gemma4B200ElectricConsolidationPlan {
     postgresTables: ReadonlyArray<string>;
   }>;
   model: Readonly<{
-    modelFamily: string;
+    modelFamily: "gemma-4";
     servingRole: "local-private-memory-intelligence";
     expectedCapabilities: ReadonlyArray<string>;
   }>;
   accelerator: Readonly<{
-    acceleratorClass: string;
+    acceleratorClass: "b200";
     placement: "offline-worker-pool";
     rdmaScope: "inside-brain-worker-pool-only";
   }>;
@@ -3130,7 +3137,7 @@ export interface Gemma4B200ElectricConsolidationPlan {
   workerPipeline: Readonly<{
     executionMode: "offline-plan-only";
     liveWorkingLoopCoupling: "offline-decoupled";
-    operations: ReadonlyArray<string>;
+    operations: ReadonlyArray<Gemma4B200ElectricWorkerOperation>;
   }>;
   checkpointPolicy: Readonly<{
     cursorScope: "agentId+syncSource+streamId";
@@ -3147,6 +3154,9 @@ export interface Gemma4B200ElectricConsolidationPlan {
 
 export type ElectricEventOffset = string | number;
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue };
+
 export interface ElectricStreamEventInput {
   agentId: string;
   syncSource?: string | null;
@@ -3154,7 +3164,7 @@ export interface ElectricStreamEventInput {
   offset: ElectricEventOffset;
   eventType?: string | null;
   type?: string | null;
-  payload?: unknown;
+  payload?: JsonValue;
   observedAt?: string | null;
 }
 
@@ -3170,7 +3180,7 @@ export interface NormalizedElectricBrainEventRow {
   streamId: string;
   offset: ElectricEventOffset;
   eventType: string;
-  payload: unknown;
+  payload: JsonValue;
   observedAt: string | null;
 }
 
@@ -3193,8 +3203,11 @@ export interface ElectricEventIngestionResult {
 export type ElectricPostgresShapeTable =
   | "agent_events"
   | "memory_candidates"
+  | "short_term_memory"
+  | "tool_calls"
   | "long_term_memory"
   | "consolidation_jobs"
+  | "consolidation_runs"
   | "stream_checkpoints";
 
 export type ElectricPostgresShapeAccessScope = "agent" | "session" | "service";
@@ -3205,6 +3218,8 @@ export interface ElectricPostgresShapeContractEntry {
   whereTemplate: string;
   parameters: ReadonlyArray<string>;
   accessScope: ElectricPostgresShapeAccessScope;
+  exposure?: "backend-only";
+  requiresServiceAuthorization?: true;
 }
 
 export interface ElectricPostgresShapeContract {
@@ -3269,6 +3284,7 @@ export const OFFLINE_BATCH_ORDERING_STRATEGIES: ReadonlyArray<OfflineBatchOrderi
 export const DEFAULT_OFFLINE_BATCH_ORDERING_STRATEGY: "priority-descending-then-sequence";
 export const DEFAULT_B200_OFFLINE_BATCH_LIMIT: Readonly<OfflineBatchLimit>;
 export const GEMMA4_B200_ELECTRIC_PLAN_SCHEMA_ID: "gemma4_b200_electric_consolidation_plan";
+export const GEMMA4_B200_ELECTRIC_SAFE_RUNTIME_TRANSPORTS: ReadonlyArray<Gemma4B200ElectricSafeRuntimeTransport>;
 export const GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS: ReadonlyArray<Gemma4B200ElectricWorkerOperation>;
 export function createGemma4B200ElectricConsolidationPlan(
   options?: Gemma4B200ElectricConsolidationPlanInput,

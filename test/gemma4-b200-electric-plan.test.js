@@ -43,6 +43,46 @@ test("blocks RDMA across the live runtime boundary", () => {
   );
 });
 
+test("blocks unsafe runtime boundary transports", () => {
+  for (const transport of ["rdma", "shared-memory", "shm"]) {
+    assert.throws(
+      () =>
+        createGemma4B200ElectricConsolidationPlan({
+          runtimeBoundary: { transport },
+        }),
+      /runtimeBoundary.transport must remain an RPC-safe transport/,
+    );
+  }
+});
+
+test("keeps worker operations within offline memory intelligence duties", () => {
+  assert.throws(
+    () =>
+      createGemma4B200ElectricConsolidationPlan({
+        workerPipeline: { operations: ["live-serving"] },
+      }),
+    /workerPipeline.operations must use supported offline operations/,
+  );
+});
+
+test("keeps Gemma 4 and B200 as hard contract invariants", () => {
+  assert.throws(
+    () =>
+      createGemma4B200ElectricConsolidationPlan({
+        model: { modelFamily: "remote-gpt" },
+      }),
+    /model.modelFamily must remain gemma-4/,
+  );
+
+  assert.throws(
+    () =>
+      createGemma4B200ElectricConsolidationPlan({
+        accelerator: { acceleratorClass: "h100" },
+      }),
+    /accelerator.acceleratorClass must remain b200/,
+  );
+});
+
 test("keeps Electric on read sync and durable stream duties, not write authority", () => {
   assert.throws(
     () =>

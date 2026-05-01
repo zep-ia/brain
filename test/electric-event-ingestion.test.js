@@ -59,6 +59,24 @@ test("produces one checkpoint intent per agentId + syncSource + streamId", () =>
   });
 });
 
+test("preserves provided stream order for opaque string cursor checkpoints", () => {
+  const result = ingestElectricEventBatch([
+    baseEvent({ offset: "cursor-z" }),
+    baseEvent({ offset: "cursor-a" }),
+  ]);
+
+  assert.deepEqual(result.checkpointIntents[0], {
+    agentId: "agent-1",
+    syncSource: "electric-streams",
+    streamId: "hermes/session/123",
+    fromOffset: "cursor-z",
+    toOffset: "cursor-a",
+    status: "pending",
+    committable: false,
+    durableWriteResult: null,
+  });
+});
+
 test("does not collapse checkpoint groups when identifiers contain separator-like bytes", () => {
   const result = ingestElectricEventBatch([
     baseEvent({
@@ -142,5 +160,22 @@ test("rejects non-string observedAt values", () => {
   assert.throws(
     () => ingestElectricEventBatch([baseEvent({ observedAt: 123 })]),
     /observedAt must be a string/,
+  );
+});
+
+test("preserves JSON null payloads while defaulting missing payloads to empty object", () => {
+  const result = ingestElectricEventBatch([
+    baseEvent({ payload: null }),
+    baseEvent({ offset: 2, payload: undefined }),
+  ]);
+
+  assert.equal(result.rows[0].payload, null);
+  assert.deepEqual(result.rows[1].payload, {});
+});
+
+test("rejects payload values that are not JSON-compatible", () => {
+  assert.throws(
+    () => ingestElectricEventBatch([baseEvent({ payload: new Date("2026-01-01T00:00:00.000Z") })]),
+    /payload must be JSON-compatible/,
   );
 });
