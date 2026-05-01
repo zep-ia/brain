@@ -16022,6 +16022,13 @@ export {
   createGemma4B200ElectricConsolidationPlan,
 } from "./gemma4-b200-electric-plan.js";
 
+export { ingestElectricEventBatch } from "./electric-event-ingestion.js";
+
+export {
+  ELECTRIC_POSTGRES_SHAPE_CONTRACT_SCHEMA_ID,
+  createElectricPostgresShapeContract,
+} from "./electric-shape-contract.js";
+
 export {
   OFFLINE_CONSOLIDATION_BATCH_PLAN_STAGE_IDS,
   OFFLINE_CONSOLIDATION_BATCH_PLAN_SAFE_OPERATIONS,

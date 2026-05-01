@@ -3145,6 +3145,77 @@ export interface Gemma4B200ElectricConsolidationPlan {
   }>;
 }
 
+export type ElectricEventOffset = string | number;
+
+export interface ElectricStreamEventInput {
+  agentId: string;
+  syncSource?: string | null;
+  streamId: string;
+  offset: ElectricEventOffset;
+  eventType?: string | null;
+  type?: string | null;
+  payload?: unknown;
+  observedAt?: string | null;
+}
+
+export interface ElectricEventIngestionOptions {
+  syncSource?: string | null;
+  observedAt?: string | null;
+  durableWriteResult?: unknown;
+}
+
+export interface NormalizedElectricBrainEventRow {
+  agentId: string;
+  syncSource: string;
+  streamId: string;
+  offset: ElectricEventOffset;
+  eventType: string;
+  payload: unknown;
+  observedAt: string | null;
+}
+
+export interface ElectricCheckpointIntent {
+  agentId: string;
+  syncSource: string;
+  streamId: string;
+  fromOffset: ElectricEventOffset;
+  toOffset: ElectricEventOffset;
+  status: "pending" | "committable";
+  committable: boolean;
+  durableWriteResult: unknown | null;
+}
+
+export interface ElectricEventIngestionResult {
+  rows: ReadonlyArray<Readonly<NormalizedElectricBrainEventRow>>;
+  checkpointIntents: ReadonlyArray<Readonly<ElectricCheckpointIntent>>;
+}
+
+export type ElectricPostgresShapeTable =
+  | "agent_events"
+  | "memory_candidates"
+  | "long_term_memory"
+  | "consolidation_jobs"
+  | "stream_checkpoints";
+
+export type ElectricPostgresShapeAccessScope = "agent" | "session" | "service";
+
+export interface ElectricPostgresShapeContractEntry {
+  shapeName: string;
+  table: ElectricPostgresShapeTable;
+  whereTemplate: string;
+  parameters: ReadonlyArray<string>;
+  accessScope: ElectricPostgresShapeAccessScope;
+}
+
+export interface ElectricPostgresShapeContract {
+  schemaId: "agent_brain_electric_postgres_shape_contract";
+  schemaVersion: "1.0.0";
+  description: string;
+  readSyncPlane: "electric-postgres-shapes";
+  writeAuthority: false;
+  shapes: ReadonlyArray<Readonly<ElectricPostgresShapeContractEntry>>;
+}
+
 export const MEMORY_NODE_KINDS: Readonly<{
   root: "agent_brain";
   youngGeneration: "young_generation";
@@ -3202,6 +3273,12 @@ export const GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS: ReadonlyArray<Gemma4B200Ele
 export function createGemma4B200ElectricConsolidationPlan(
   options?: Gemma4B200ElectricConsolidationPlanInput,
 ): Readonly<Gemma4B200ElectricConsolidationPlan>;
+export function ingestElectricEventBatch(
+  events: ReadonlyArray<ElectricStreamEventInput>,
+  options?: ElectricEventIngestionOptions,
+): Readonly<ElectricEventIngestionResult>;
+export const ELECTRIC_POSTGRES_SHAPE_CONTRACT_SCHEMA_ID: "agent_brain_electric_postgres_shape_contract";
+export function createElectricPostgresShapeContract(): Readonly<ElectricPostgresShapeContract>;
 export const PROTECTED_IDENTITY_FIELDS: ReadonlyArray<
   | "agentId"
   | "persona"
