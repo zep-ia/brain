@@ -3058,6 +3058,93 @@ export interface ArchivalTransitionResult {
   nextGraph: Readonly<AgentBrainMemoryGraph>;
 }
 
+export type Gemma4B200ElectricWorkerOperation =
+  | "embedding-generation"
+  | "memory-candidate-reranking"
+  | "hippocampus-summary-distillation"
+  | "near-duplicate-clustering"
+  | "stale-memory-detection"
+  | "contradiction-screening";
+
+export interface Gemma4B200ElectricConsolidationPlanInput {
+  planId?: string | null;
+  streamIds?: ReadonlyArray<string> | null;
+  postgresTables?: ReadonlyArray<string> | null;
+  runtimeBoundary?: {
+    transport?: string | null;
+    zepiaToBrainUsesRdma?: false | null;
+  } | null;
+  electric?: {
+    streamIds?: ReadonlyArray<string> | null;
+    postgresTables?: ReadonlyArray<string> | null;
+  } | null;
+  model?: {
+    modelFamily?: string | null;
+  } | null;
+  accelerator?: {
+    acceleratorClass?: string | null;
+  } | null;
+  workerPipeline?: {
+    operations?: ReadonlyArray<string> | null;
+  } | null;
+  writePath?: {
+    electricOwnsWrites?: false | null;
+    durableWriter?: string | null;
+  } | null;
+}
+
+export interface Gemma4B200ElectricConsolidationPlan {
+  schemaId: "gemma4_b200_electric_consolidation_plan";
+  schemaVersion: "1.0.0";
+  planId: string;
+  purpose: string;
+  runtimeBoundary: Readonly<{
+    transport: string;
+    zepiaToBrainUsesRdma: false;
+    authority: "caller-authorized-offline-window";
+    authorizedRuntimePhases: ReadonlyArray<"idle" | "rest" | "break" | "sleep">;
+  }>;
+  electric: Readonly<{
+    role: "durable-stream-and-read-sync-plane";
+    streamProtocol: "http-append-only-offset-stream";
+    syncPrimitive: "postgres-shape-read-sync";
+    streamIds: ReadonlyArray<string>;
+    postgresTables: ReadonlyArray<string>;
+  }>;
+  model: Readonly<{
+    modelFamily: string;
+    servingRole: "local-private-memory-intelligence";
+    expectedCapabilities: ReadonlyArray<string>;
+  }>;
+  accelerator: Readonly<{
+    acceleratorClass: string;
+    placement: "offline-worker-pool";
+    rdmaScope: "inside-brain-worker-pool-only";
+  }>;
+  identityIsolation: Readonly<{
+    mode: "agent-scoped";
+    teamIdleMergesIdentity: false;
+    overwriteNamespace: "agent-scoped";
+    requiresIndependentWrites: true;
+  }>;
+  workerPipeline: Readonly<{
+    executionMode: "offline-plan-only";
+    liveWorkingLoopCoupling: "offline-decoupled";
+    operations: ReadonlyArray<string>;
+  }>;
+  checkpointPolicy: Readonly<{
+    cursorScope: "agentId+syncSource+streamId";
+    advanceAfterDurableWrite: true;
+    failedConsolidationAdvancesCheckpoint: false;
+    replayPreference: "replay-is-safer-than-gap";
+  }>;
+  writePath: Readonly<{
+    electricOwnsWrites: false;
+    durableWriter: string;
+    syncAfterWrite: "postgres-logical-replication-to-electric-shapes";
+  }>;
+}
+
 export const MEMORY_NODE_KINDS: Readonly<{
   root: "agent_brain";
   youngGeneration: "young_generation";
@@ -3110,6 +3197,11 @@ export const OFFLINE_CONSOLIDATION_PLAN_BUILDER_PRESET_IDS: ReadonlyArray<string
 export const OFFLINE_BATCH_ORDERING_STRATEGIES: ReadonlyArray<OfflineBatchOrderingStrategy>;
 export const DEFAULT_OFFLINE_BATCH_ORDERING_STRATEGY: "priority-descending-then-sequence";
 export const DEFAULT_B200_OFFLINE_BATCH_LIMIT: Readonly<OfflineBatchLimit>;
+export const GEMMA4_B200_ELECTRIC_PLAN_SCHEMA_ID: "gemma4_b200_electric_consolidation_plan";
+export const GEMMA4_B200_ELECTRIC_WORKER_OPERATIONS: ReadonlyArray<Gemma4B200ElectricWorkerOperation>;
+export function createGemma4B200ElectricConsolidationPlan(
+  options?: Gemma4B200ElectricConsolidationPlanInput,
+): Readonly<Gemma4B200ElectricConsolidationPlan>;
 export const PROTECTED_IDENTITY_FIELDS: ReadonlyArray<
   | "agentId"
   | "persona"
